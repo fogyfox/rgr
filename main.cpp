@@ -6,11 +6,234 @@
 #include <utility>
 #include <fstream>
 #include <limits>
-
+#include <locale>
 
 using namespace std;
 
 // Функция для настройки кодировки
+void setupEncoding() {
+    setlocale(LC_ALL, "Russian");
+}
+
+// === ФУНКЦИИ ДЛЯ ШИФРА ВИЖЕНЕРА ===
+
+// Функция для проверки, является ли символ латинской буквой
+bool isLatin(char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+
+// Функция для проверки, является ли символ кириллической буквой (Windows-1251)
+bool isCyrillic(char c) {
+    // Русские буквы в кодировке Windows-1251
+    return (c >= -64 && c <= -1) || c == -72 || c == -88;
+}
+
+// Функция для приведения кириллической буквы к верхнему регистру (Windows-1251)
+char toUpperCyrillic(char c) {
+    // Строчные буквы в Windows-1251: -32..-1 (а-я), -88 (ё)
+    // Прописные буквы в Windows-1251: -64..-33 (А-Я), -72 (Ё)
+    if (c >= -32 && c <= -1) { // а-я
+        return c - 32; // Преобразование строчной в прописную
+    } else if (c == -88) { // ё
+        return -72; // Ё
+    }
+    return c;
+}
+
+// Функция для приведения кириллической буквы к нижнему регистру (Windows-1251)
+char toLowerCyrillic(char c) {
+    if (c >= -64 && c <= -33) { // А-Я
+        return c + 32; // Преобразование прописной в строчную
+    } else if (c == -72) { // Ё
+        return -88; // ё
+    }
+    return c;
+}
+
+// Функция для получения позиции кириллической буквы в алфавите
+int getCyrillicPosition(char c) {
+    // Позиции в алфавите для Windows-1251:
+    // А-Е: -64..-59 (0-5)
+    // Ё: -72 (6)
+    // Ж-Я: -58..-33 (7-32)
+    
+    if (c >= -64 && c <= -59) { // А-Е
+        return c + 64; // 0-5
+    } else if (c == -72) { // Ё
+        return 6;
+    } else if (c >= -58 && c <= -33) { // Ж-Я
+        return c + 65; // 7-32
+    }
+    return -1; // не кириллическая буква
+}
+
+// Функция для получения кириллической буквы по позиции
+char getCyrillicFromPosition(int pos) {
+    if (pos >= 0 && pos <= 5) { // А-Е
+        return pos - 64;
+    } else if (pos == 6) { // Ё
+        return -72;
+    } else if (pos >= 7 && pos <= 32) { // Ж-Я
+        return pos - 65;
+    }
+    return '?';
+}
+
+// Функция для подготовки ключа
+string prepareKey(const string& key, bool useCyrillic = false) {
+    string preparedKey;
+    for (char c : key) {
+        if (useCyrillic ? isCyrillic(c) : isLatin(c)) {
+            if (useCyrillic) {
+                preparedKey += toUpperCyrillic(c);
+            } else {
+                preparedKey += toupper(c);
+            }
+        }
+    }
+    return preparedKey;
+}
+
+// Функция для расширения ключа до длины текста
+string expandKey(const string& text, const string& key, bool useCyrillic = false) {
+    string expandedKey;
+    expandedKey.reserve(text.length());
+    
+    int keyIndex = 0;
+    for (char c : text) {
+        if ((useCyrillic && isCyrillic(c)) || (!useCyrillic && isLatin(c))) {
+            expandedKey += key[keyIndex % key.length()];
+            keyIndex++;
+        } else {
+            expandedKey += c; // Сохраняем другие символы как есть
+        }
+    }
+    return expandedKey;
+}
+
+// Функция шифрования Виженера
+string encryptVigenere(const string& plaintext, const string& key, bool useCyrillic = false) {
+    string ciphertext;
+    ciphertext.reserve(plaintext.length());
+    
+    string preparedKey = prepareKey(key, useCyrillic);
+    if (preparedKey.empty()) {
+        throw invalid_argument("Ключ должен содержать хотя бы одну букву");
+    }
+    
+    string expandedKey = expandKey(plaintext, preparedKey, useCyrillic);
+    
+    int alphabetSize = useCyrillic ? 33 : 26;
+    
+    for (size_t i = 0; i < plaintext.length(); i++) {
+        char p = plaintext[i];
+        
+        if ((useCyrillic && isCyrillic(p)) || (!useCyrillic && isLatin(p))) {
+            char k = expandedKey[i];
+            char encryptedChar;
+            
+            if (useCyrillic) {
+                int pPos = getCyrillicPosition(toUpperCyrillic(p));
+                int kPos = getCyrillicPosition(k);
+                
+                if (pPos != -1 && kPos != -1) {
+                    int encryptedPos = (pPos + kPos) % alphabetSize;
+                    encryptedChar = getCyrillicFromPosition(encryptedPos);
+                    
+                    // Сохраняем регистр
+                    if (p >= -32 && p <= -1) { // строчная буква
+                        encryptedChar = toLowerCyrillic(encryptedChar);
+                    }
+                } else {
+                    encryptedChar = p; // если не удалось определить позицию
+                }
+            } else {
+                if (isupper(p)) {
+                    encryptedChar = ((p - 'A') + (k - 'A')) % alphabetSize + 'A';
+                } else {
+                    encryptedChar = ((p - 'a') + (k - 'A')) % alphabetSize + 'a';
+                }
+            }
+            
+            ciphertext += encryptedChar;
+        } else {
+            // Сохраняем другие символы как есть
+            ciphertext += p;
+        }
+    }
+    
+    return ciphertext;
+}
+
+// Функция дешифрования Виженера
+string decryptVigenere(const string& ciphertext, const string& key, bool useCyrillic = false) {
+    string plaintext;
+    plaintext.reserve(ciphertext.length());
+    
+    string preparedKey = prepareKey(key, useCyrillic);
+    if (preparedKey.empty()) {
+        throw invalid_argument("Ключ должен содержать хотя бы одну букву");
+    }
+    
+    string expandedKey = expandKey(ciphertext, preparedKey, useCyrillic);
+    
+    int alphabetSize = useCyrillic ? 33 : 26;
+    
+    for (size_t i = 0; i < ciphertext.length(); i++) {
+        char c = ciphertext[i];
+        
+        if ((useCyrillic && isCyrillic(c)) || (!useCyrillic && isLatin(c))) {
+            char k = expandedKey[i];
+            char decryptedChar;
+            
+            if (useCyrillic) {
+                int cPos = getCyrillicPosition(toUpperCyrillic(c));
+                int kPos = getCyrillicPosition(k);
+                
+                if (cPos != -1 && kPos != -1) {
+                    int decryptedPos = (cPos - kPos + alphabetSize) % alphabetSize;
+                    decryptedChar = getCyrillicFromPosition(decryptedPos);
+                    
+                    // Сохраняем регистр
+                    if (c >= -32 && c <= -1) { // строчная буква
+                        decryptedChar = toLowerCyrillic(decryptedChar);
+                    }
+                } else {
+                    decryptedChar = c; // если не удалось определить позицию
+                }
+            } else {
+                if (isupper(c)) {
+                    decryptedChar = ((c - 'A') - (k - 'A') + alphabetSize) % alphabetSize + 'A';
+                } else {
+                    decryptedChar = ((c - 'a') - (k - 'A') + alphabetSize) % alphabetSize + 'a';
+                }
+            }
+            
+            plaintext += decryptedChar;
+        } else {
+            // Сохраняем другие символы как есть
+            plaintext += c;
+        }
+    }
+    
+    return plaintext;
+}
+
+// Функция для выбора алфавита
+bool selectAlphabet() {
+    cout << "\nВыберите алфавит:\n";
+    cout << "1 - Латинский\n";
+    cout << "2 - Кириллический\n";
+    cout << "Ваш выбор: ";
+    
+    int choice;
+    cin >> choice;
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    
+    return (choice == 2); // true для кириллицы, false для латиницы
+}
+
+// === СУЩЕСТВУЮЩИЕ ФУНКЦИИ ПЕРЕСТАНОВКИ ===
 
 // Заменяем пробелы на подчёркивания
 string replaceSpacesWithUnderscores(const string& text) {
@@ -75,7 +298,7 @@ string encryptPermutation(const string& text, const string& key) {
 
     // Оптимизация: используем reserve для предварительного выделения памяти
     string ciphertext;
-    ciphertext.reserve(processedText.size() + rows * 2); // + буфер для форматирования
+    ciphertext.reserve(processedText.size() + rows * 2);
 
     // Прямое вычисление без создания полной таблицы в памяти
     for (int i = 0; i < rows; ++i) {
@@ -196,26 +419,23 @@ string decryptPermutation(const string& ciphertext, const string& key) {
 
 // Функция для чтения больших файлов
 string readLargeFile(const string& fileName) {
-    ifstream in(fileName, ios::binary | ios::ate); // открываем в конце файла
+    ifstream in(fileName, ios::binary | ios::ate);
     if (!in.is_open()) {
         throw runtime_error("Ошибка: не удалось открыть файл '" + fileName + "'");
     }
 
-    // Получаем размер файла
     streamsize size = in.tellg();
     in.seekg(0, ios::beg);
 
-    // Проверяем размер файла
-    if (size > 100 * 1024 * 1024) { // больше 100 MB
+    if (size > 100 * 1024 * 1024) {
         cout << "Предупреждение: файл очень большой (" << size / (1024 * 1024)
             << " MB). Обработка может занять время..." << endl;
     }
 
-    // Читаем файл блоками для экономии памяти
-    const size_t BUFFER_SIZE = 64 * 1024; // 64 KB блоки
+    const size_t BUFFER_SIZE = 64 * 1024;
     vector<char> buffer(BUFFER_SIZE);
     string content;
-    content.reserve(size); // предварительное выделение памяти
+    content.reserve(size);
 
     cout << "Чтение файла... Размер: " << size / 1024 << " KB" << endl;
 
@@ -235,8 +455,7 @@ void writeLargeFile(const string& fileName, const string& content) {
         throw runtime_error("Ошибка: не удалось создать файл '" + fileName + "'");
     }
 
-    // Записываем блоками
-    const size_t BUFFER_SIZE = 64 * 1024; // 64 KB блоки
+    const size_t BUFFER_SIZE = 64 * 1024;
     size_t totalWritten = 0;
     size_t totalSize = content.size();
 
@@ -253,26 +472,7 @@ void writeLargeFile(const string& fileName, const string& content) {
         << " (" << totalSize / 1024 << " KB)" << endl;
 }
 
-// Функция для показа прогресса
-void showProgress(size_t current, size_t total, const string& operation) {
-    if (total > 1000000) { // показываем прогресс только для больших файлов
-        int percent = static_cast<int>((current * 100) / total);
-        if (percent % 5 == 0) { // обновляем каждые 5%
-            cout << operation << ": " << percent << "%\r";
-            cout.flush();
-        }
-    }
-}
-
 // Заглушки для других методов шифрования
-string encryptVigenere(const string& text, const string& key) {
-    return "Шифр Вижинера ещё не реализован";
-}
-
-string decryptVigenere(const string& ciphertext, const string& key) {
-    return "Дешифрование Вижинера ещё не реализовано";
-}
-
 string encryptGronsfeld(const string& text, const string& key) {
     return "Шифр Гронсфельда ещё не реализован";
 }
@@ -302,7 +502,6 @@ vector<unsigned char> readBinaryFile(const string& fileName) {
 vector<unsigned char> encryptPermutationBinary(const vector<unsigned char>& data, const string& key) {
     if (data.empty()) return {};
 
-    // Обработка ключа (только буквы, в верхний регистр)
     string upperKey;
     for (char c : key) if (isalpha(c)) upperKey += toupper(c);
     if (upperKey.empty()) return data;
@@ -310,7 +509,6 @@ vector<unsigned char> encryptPermutationBinary(const vector<unsigned char>& data
     int cols = (int)upperKey.size();
     int rows = (data.size() + cols - 1) / cols;
 
-    // Создаём порядок столбцов
     vector<pair<char,int>> keyChars;
     for (int i = 0; i < (int)upperKey.size(); ++i) keyChars.push_back({upperKey[i], i});
     sort(keyChars.begin(), keyChars.end(), [](auto &a, auto &b){
@@ -320,7 +518,6 @@ vector<unsigned char> encryptPermutationBinary(const vector<unsigned char>& data
     vector<int> order(upperKey.size());
     for (int i = 0; i < (int)keyChars.size(); ++i) order[keyChars[i].second] = i;
 
-    // Шифруем данные без добавления лишних байтов
     vector<unsigned char> encrypted(data.size());
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
@@ -337,7 +534,6 @@ vector<unsigned char> encryptPermutationBinary(const vector<unsigned char>& data
 
     return encrypted;
 }
-
 
 vector<unsigned char> decryptPermutationBinary(const vector<unsigned char>& data, const string& key, size_t originalSize) {
     if (data.empty()) return {};
@@ -374,7 +570,6 @@ vector<unsigned char> decryptPermutationBinary(const vector<unsigned char>& data
         }
     }
 
-    // Убираем лишние нули и мусор
     if (originalSize < decrypted.size())
         decrypted.resize(originalSize);
     else {
@@ -385,8 +580,6 @@ vector<unsigned char> decryptPermutationBinary(const vector<unsigned char>& data
     return decrypted;
 }
 
-
-
 void writeLargeFileBinary(const string& fileName, const vector<unsigned char>& data) {
     ofstream out(fileName, ios::binary);
     if (!out.is_open()) {
@@ -396,12 +589,9 @@ void writeLargeFileBinary(const string& fileName, const vector<unsigned char>& d
     out.close();
 }
 
-vector<unsigned char> encryptPermutationBinary(const vector<unsigned char>& data, const string& key);
-vector<unsigned char> decryptPermutationBinary(const vector<unsigned char>& data, const string& key, size_t originalSize);
-
-
-
 int main() {
+    setupEncoding();
+    
     while (true) {
         cout << "\n=== КРИПТОГРАФИЧЕСКАЯ СИСТЕМА ===" << endl;
         cout << "0 - Выход" << endl;
@@ -413,7 +603,7 @@ int main() {
         cin >> mode;
 
         cin.clear();
-        cin.ignore(10000, '\n');
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
         if (mode == 0) {
             cout << "Завершение программы..." << endl;
@@ -434,7 +624,7 @@ int main() {
         cin >> fileType;
 
         cin.clear();
-        cin.ignore(10000, '\n');
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
         if (fileType < 1 || fileType > 2) {
             cout << "Неверный выбор типа файла." << endl;
@@ -443,16 +633,17 @@ int main() {
 
         cout << "\nМетоды шифрования:" << endl;
         cout << "1 - Табличная перестановка с ключом" << endl;
+        cout << "2 - Шифр Виженера" << endl;
 
         int method;
         cout << "Выберите метод: ";
         cin >> method;
 
         cin.clear();
-        cin.ignore(10000, '\n');
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
-        if (method != 1) {
-            cout << "Пока доступен только метод перестановки." << endl;
+        if (method < 1 || method > 2) {
+            cout << "Неверный выбор метода." << endl;
             continue;
         }
 
@@ -468,21 +659,35 @@ int main() {
                 if (fileType == 1) {
                     // Текстовый файл
                     string text = readLargeFile(fileName);
-                    string encrypted = encryptPermutation(text, key);
-                    writeLargeFile(fileName + ".enc.txt", encrypted);
-                    cout << "Текст зашифрован и сохранён в " << fileName + ".enc.txt" << endl;
+                    string encrypted;
+                    
+                    if (method == 1) {
+                        // Перестановка
+                        encrypted = encryptPermutation(text, key);
+                        writeLargeFile(fileName + ".enc_perm.txt", encrypted);
+                        cout << "Текст зашифрован (перестановка) и сохранён в " << fileName + ".enc_perm.txt" << endl;
+                    } else {
+                        // Виженер
+                        bool useCyrillic = selectAlphabet();
+                        encrypted = encryptVigenere(text, key, useCyrillic);
+                        writeLargeFile(fileName + ".enc_vig.txt", encrypted);
+                        cout << "Текст зашифрован (Виженер) и сохранён в " << fileName + ".enc_vig.txt" << endl;
+                    }
                 } else {
-                    // Бинарный файл
-                    auto data = readBinaryFile(fileName);
-                    auto encrypted = encryptPermutationBinary(data, key);
-                    writeLargeFileBinary(fileName + ".enc", encrypted);
+                    // Бинарный файл - только перестановка
+                    if (method == 1) {
+                        auto data = readBinaryFile(fileName);
+                        auto encrypted = encryptPermutationBinary(data, key);
+                        writeLargeFileBinary(fileName + ".enc", encrypted);
 
-                    // сохраняем исходный размер для восстановления
-                    ofstream meta(fileName + ".meta");
-                    meta << data.size();
-                    meta.close();
+                        ofstream meta(fileName + ".meta");
+                        meta << data.size();
+                        meta.close();
 
-                    cout << "Файл зашифрован и сохранён в " << fileName + ".enc" << endl;
+                        cout << "Файл зашифрован (перестановка) и сохранён в " << fileName + ".enc" << endl;
+                    } else {
+                        cout << "Шифр Виженера не поддерживается для бинарных файлов." << endl;
+                    }
                 }
             } 
             else {
@@ -490,23 +695,37 @@ int main() {
                 if (fileType == 1) {
                     // Текстовый файл
                     string text = readLargeFile(fileName);
-                    string decrypted = decryptPermutation(text, key);
-                    writeLargeFile(fileName + ".dec.txt", decrypted);
-                    cout << "Файл расшифрован и сохранён в " << fileName + ".dec.txt" << endl;
+                    string decrypted;
+                    
+                    if (method == 1) {
+                        // Перестановка
+                        decrypted = decryptPermutation(text, key);
+                        writeLargeFile(fileName + ".dec_perm.txt", decrypted);
+                        cout << "Файл расшифрован (перестановка) и сохранён в " << fileName + ".dec_perm.txt" << endl;
+                    } else {
+                        // Виженер
+                        bool useCyrillic = selectAlphabet();
+                        decrypted = decryptVigenere(text, key, useCyrillic);
+                        writeLargeFile(fileName + ".dec_vig.txt", decrypted);
+                        cout << "Файл расшифрован (Виженер) и сохранён в " << fileName + ".dec_vig.txt" << endl;
+                    }
                 } else {
-                    // Бинарный файл
-                    size_t origSize = 0;
+                    // Бинарный файл - только перестановка
+                    if (method == 1) {
+                        size_t origSize = 0;
 
-                    // читаем мета-информацию (размер исходного файла)
-                    string baseName = fileName.substr(0, fileName.find_last_of('.'));
-                    ifstream meta(baseName + ".meta");
-                    if (meta.is_open()) meta >> origSize;
-                    meta.close();
+                        string baseName = fileName.substr(0, fileName.find_last_of('.'));
+                        ifstream meta(baseName + ".meta");
+                        if (meta.is_open()) meta >> origSize;
+                        meta.close();
 
-                    auto data = readBinaryFile(fileName);
-                    auto decrypted = decryptPermutationBinary(data, key, origSize);
-                    writeLargeFileBinary(fileName + ".dec", decrypted);
-                    cout << "Файл расшифрован и сохранён в " << fileName + ".dec" << endl;
+                        auto data = readBinaryFile(fileName);
+                        auto decrypted = decryptPermutationBinary(data, key, origSize);
+                        writeLargeFileBinary(fileName + ".dec", decrypted);
+                        cout << "Файл расшифрован (перестановка) и сохранён в " << fileName + ".dec" << endl;
+                    } else {
+                        cout << "Шифр Виженера не поддерживается для бинарных файлов." << endl;
+                    }
                 }
             }
         } 
@@ -517,4 +736,3 @@ int main() {
 
     return 0;
 }
-
