@@ -11,19 +11,20 @@
 
 using namespace std;
 
-// ======== ТЕКСТОВЫЕ ФАЙЛЫ ========
+//для текстовых файлов
 void encryptTextFile(const string& inputFile, const string& outputFile, const string& key, int method) {
     ifstream in(inputFile);
     ofstream out(outputFile);
     if (!in) throw runtime_error("Не удалось открыть файл " + inputFile);
     if (!out) throw runtime_error("Не удалось создать файл " + outputFile);
 
+    //чтение файла построчно с сохранением переносов строк
     string text;
     string line;
     while (getline(in, line)) {
         text += line + "\n";
     }
-    if (!text.empty()) text.pop_back(); // удаляем последний \n
+    if (!text.empty()) text.pop_back(); //удаляем последний \n
 
     string result;
     switch (method) {
@@ -52,7 +53,7 @@ void decryptTextFile(const string& inputFile, const string& outputFile, const st
     while (getline(in, line)) {
         text += line + "\n";
     }
-    if (!text.empty()) text.pop_back(); // удаляем последний \n
+    if (!text.empty()) text.pop_back(); //удаляем последний \n
 
     string result;
     switch (method) {
@@ -70,7 +71,7 @@ void decryptTextFile(const string& inputFile, const string& outputFile, const st
     out << result;
 }
 
-// ======== БИНАРНЫЕ ФАЙЛЫ ========
+//для бинарных файлов
 void encryptBinaryFile(const string& inputFile, const string& outputFile, const string& key, int method) {
     ifstream in(inputFile, ios::binary);
     ofstream out(outputFile, ios::binary);
@@ -78,26 +79,28 @@ void encryptBinaryFile(const string& inputFile, const string& outputFile, const 
     if (!out) throw runtime_error("Не удалось создать файл " + outputFile);
     if (key.empty()) throw runtime_error("Ключ не должен быть пустым");
 
+    //буфер для чтения/записи блоков данных
     vector<char> buffer(8192);
     size_t keyLen = key.size();
-    size_t pos = 0;
+    size_t pos = 0; //количество фактически прочитанных байт
 
     while (in) {
         in.read(buffer.data(), buffer.size());
         streamsize n = in.gcount();
+        //шифрование каждого байта в блоке
         for (streamsize i = 0; i < n; ++i) {
             unsigned char b = static_cast<unsigned char>(buffer[i]);
             unsigned char k = static_cast<unsigned char>(key[(pos + i) % keyLen]);
 
             switch (method) {
-                case 1: // Permutation - XOR
+                case 1: //Табличная перестановка - XOR
                     buffer[i] = b ^ k; 
                     break;
-                case 2: // Vigenere - сложение по модулю 256
+                case 2: // Виженер - сложение по модулю 256
                     buffer[i] = (b + k) % 256; 
                     break;
-                case 3: // Gronsfeld - сложение с цифровым ключом
-                    // Для бинарных файлов используем только цифры из ключа
+                case 3: // Гронсфельд - сложение с цифровым ключом
+                    //Для бинарных файлов используем только цифры из ключа
                     unsigned char digit_key = 0;
                     for (char key_char : key) {
                         if (key_char >= '0' && key_char <= '9') {
@@ -110,7 +113,7 @@ void encryptBinaryFile(const string& inputFile, const string& outputFile, const 
             }
         }
         pos += n;
-        out.write(buffer.data(), n);
+        out.write(buffer.data(), n); //запись зашифрованного блока
     }
 }
 
@@ -133,14 +136,13 @@ void decryptBinaryFile(const string& inputFile, const string& outputFile, const 
             unsigned char k = static_cast<unsigned char>(key[(pos + i) % keyLen]);
 
             switch (method) {
-                case 1: // Permutation - XOR
+                case 1: //Табличное шифрование - XOR
                     buffer[i] = b ^ k; 
                     break;
-                case 2: // Vigenere - вычитание по модулю 256
+                case 2: //Виженер - вычитание по модулю 256
                     buffer[i] = (b - k + 256) % 256; 
                     break;
-                case 3: // Gronsfeld - вычитание с цифровым ключом
-                    // Для бинарных файлов используем только цифры из ключа
+                case 3: //Гронсфельд - вычитание с цифровым ключом (берётся только первая цифра из ключа)
                     unsigned char digit_key = 0;
                     for (char key_char : key) {
                         if (key_char >= '0' && key_char <= '9') {
@@ -153,11 +155,11 @@ void decryptBinaryFile(const string& inputFile, const string& outputFile, const 
             }
         }
         pos += n;
-        out.write(buffer.data(), n);
+        out.write(buffer.data(), n); //запись
     }
 }
 
-// ======== ФУНКЦИЯ СОХРАНЕНИЯ ТЕКСТА В ФАЙЛ ========
+//сохранение текста в файл
 void saveTextToFile(const string& text, const string& filename) {
     ofstream file(filename);
     if (!file) throw runtime_error("Не удалось создать файл " + filename);
@@ -165,7 +167,7 @@ void saveTextToFile(const string& text, const string& filename) {
     cout << "Текст успешно сохранён в файл: " << filename << "\n";
 }
 
-// ======== МЕНЮ ========
+//интерфейс
 int main() {
     while(true) {
         cout << "\n=== КРИПТОГРАФИЧЕСКАЯ СИСТЕМА ===\n";
@@ -179,12 +181,13 @@ int main() {
         cin >> action; 
         cin.ignore(numeric_limits<streamsize>::max(), '\n');
         
-        if (action == 0) break;
+        if (action == 0) break; //выход из программы
         if (action < 1 || action > 3) {
             cout << "Неверный выбор. Попробуйте снова.\n";
             continue;
         }
 
+        //выбор шифра
         cout << "Выберите шифр:\n";
         cout << "1 - Permutation\n";
         cout << "2 - Vigenere\n";
@@ -200,18 +203,19 @@ int main() {
             continue;
         }
 
+        //ввод ключа
         cout << "Введите ключ: "; 
         string key; 
         getline(cin, key);
 
         try {
-            if (action == 1) { // работа с текстом
+            if (action == 1) { //работа с текстом
                 cout << "Введите текст: "; 
                 string text; 
                 getline(cin, text);
                 string result;
                 
-                if (action == 1) { // шифрование текста
+                if (action == 1) { //шифрование текста
                     switch (cipher) {
                         case 1: 
                             result = encryptPermutationText(text, key);
@@ -225,7 +229,7 @@ int main() {
                     }
                     cout << "Зашифрованный текст:\n" << result << "\n";
                     
-                    // Предложение сохранить в файл
+                    //предложение сохранить в файл
                     cout << "Хотите сохранить результат в файл? (y/n): ";
                     char saveChoice;
                     cin >> saveChoice;
@@ -238,7 +242,7 @@ int main() {
                         saveTextToFile(result, filename);
                     }
                 }
-            } else { // работа с файлами
+            } else { //работа с файлами
                 cout << "Выберите тип файла:\n";
                 cout << "1 - Текстовый файл\n";
                 cout << "2 - Бинарный файл\n";
@@ -255,7 +259,7 @@ int main() {
                 string outFile; 
                 getline(cin, outFile);
 
-                if (action == 2) { // шифрование файла
+                if (action == 2) { //шифрование файла
                     if (fileType == 1) {
                         encryptTextFile(inFile, outFile, key, cipher);
                         cout << "Текстовый файл успешно зашифрован: " << outFile << "\n";
@@ -263,7 +267,7 @@ int main() {
                         encryptBinaryFile(inFile, outFile, key, cipher);
                         cout << "Бинарный файл успешно зашифрован: " << outFile << "\n";
                     }
-                } else { // дешифрование файла
+                } else { //дешифрование файла
                     if (fileType == 1) {
                         decryptTextFile(inFile, outFile, key, cipher);
                         cout << "Текстовый файл успешно расшифрован: " << outFile << "\n";

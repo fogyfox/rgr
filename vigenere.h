@@ -2,10 +2,8 @@
 #define CIPHER_VIGENERE_H
 
 #include <string>
-using namespace std;
 
+std::string encryptVigenere(const std::string& plaintext, const std::string& key, bool useCyrillic = true);
+std::string decryptVigenere(const std::string& ciphertext, const std::string& key, bool useCyrillic = true);
 
-string encryptVigenere(const string& plaintext, const string& key, bool useCyrillic = true);
-string decryptVigenere(const string& ciphertext, const string& key, bool useCyrillic = true);
-bool detectAlphabet(const string& text, const string& key);
 #endif

@@ -3,7 +3,9 @@
 
 #include <string>
 
-std::string encryptPermutationText(const std::string& text, const std::string& key);
-std::string decryptPermutationText(const std::string& ciphertext, const std::string& key);
+using namespace std;
+
+string encryptPermutationText(const string& text, const string& key);
+string decryptPermutationText(const string& ciphertext, const string& key);
 
 #endif
