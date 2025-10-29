@@ -189,17 +189,20 @@ int main() {
 
         //выбор шифра
         cout << "Выберите шифр:\n";
-        cout << "1 - Permutation\n";
-        cout << "2 - Vigenere\n";
-        cout << "3 - Gronsfeld\n";
+        cout << "1 - Табличная перестановка с ключевым словом\n";
+        cout << "2 - шифр Виженера\n";
+        cout << "3 - шифр Гронсфельда\n";
         cout << "Выбор: ";
         
         int cipher; 
         cin >> cipher; 
         cin.ignore(numeric_limits<streamsize>::max(), '\n');
         
-        if (cipher < 1 || cipher > 3) {
+        if (cin.fail() || cipher < 1 || cipher > 3) {
             cout << "Неверный выбор шифра. Попробуйте снова.\n";
+            if (cin.fail()) {
+                cin.clear();
+            }
             continue;
         }
 
@@ -240,6 +243,9 @@ int main() {
                         string filename;
                         getline(cin, filename);
                         saveTextToFile(result, filename);
+                    } else{
+                        cout << "Результат не сохранён..." << endl;
+                    
                     }
                 }
             } else { //работа с файлами
