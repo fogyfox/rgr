@@ -119,6 +119,7 @@ vector<string> getCyrillicAlphabet(bool isUpper) {
     return alphabet;
 }
 
+//подсчитывает колличество символов в строке
 size_t countEffectiveChars(const string& text) {
     size_t count = 0;
     for (size_t i = 0; i < text.length(); ) {
