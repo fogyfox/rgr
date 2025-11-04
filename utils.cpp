@@ -2,6 +2,7 @@
 #include <string>
 #include <cctype>
 #include <vector>
+#include <iostream>
 using namespace std;
 
 //функции для работы с пробелами и подчеркиваниями
@@ -75,11 +76,12 @@ vector<string> getCyrillicAlphabet(bool isUpper) {
     vector<string> alphabet;
     
     if (isUpper) {
+        // ЗАГЛАВНЫЕ: А-Я
         // А-Е (0xD090-0xD095)
         for (unsigned char second = 0x90; second <= 0x95; second++) {
             string letter;
             letter += static_cast<char>(0xD0);
-            letter += static_cast<char>(second);
+            letter += static_cast<char>(second);  // D0 90, D0 91, ..., D0 95
             alphabet.push_back(letter);
         }
         // Ё (0xD081)
@@ -88,30 +90,39 @@ vector<string> getCyrillicAlphabet(bool isUpper) {
         for (unsigned char second = 0x96; second <= 0xAF; second++) {
             string letter;
             letter += static_cast<char>(0xD0);
-            letter += static_cast<char>(second);
+            letter += static_cast<char>(second);  // D0 96, D0 97, ..., D0 AF
             alphabet.push_back(letter);
         }
     } else {
+        // СТРОЧНЫЕ: а-я
         // а-е (0xD0B0-0xD0B5)
         for (unsigned char second = 0xB0; second <= 0xB5; second++) {
             string letter;
             letter += static_cast<char>(0xD0);
-            letter += static_cast<char>(second);
+            letter += static_cast<char>(second);  // D0 B0, D0 B1, ..., D0 B5
             alphabet.push_back(letter);
         }
         // ё (0xD191)
         alphabet.push_back("\xD1\x91");
-        // ж-я (0xD0B6-0xD0BF, 0xD180-0xD18F)
-        for (unsigned char second = 0xB6; second <= 0xBF; second++) {
+        // ж-й (0xD0B6-0xD0B9)
+        for (unsigned char second = 0xB6; second <= 0xB9; second++) {
             string letter;
             letter += static_cast<char>(0xD0);
-            letter += static_cast<char>(second);
+            letter += static_cast<char>(second);  // D0 B6, D0 B7, D0 B8, D0 B9
             alphabet.push_back(letter);
         }
+        // к-п (0xD0BA-0xD0BF)
+        for (unsigned char second = 0xBA; second <= 0xBF; second++) {
+            string letter;
+            letter += static_cast<char>(0xD0);
+            letter += static_cast<char>(second);  // D0 BA, D0 BB, ..., D0 BF
+            alphabet.push_back(letter);
+        }
+        // р-я (0xD180-0xD18F)
         for (unsigned char second = 0x80; second <= 0x8F; second++) {
             string letter;
             letter += static_cast<char>(0xD1);
-            letter += static_cast<char>(second);
+            letter += static_cast<char>(second);  // D1 80, D1 81, ..., D1 8F
             alphabet.push_back(letter);
         }
     }
@@ -119,7 +130,6 @@ vector<string> getCyrillicAlphabet(bool isUpper) {
     return alphabet;
 }
 
-//подсчитывает колличество символов в строке
 size_t countEffectiveChars(const string& text) {
     size_t count = 0;
     for (size_t i = 0; i < text.length(); ) {
