@@ -29,22 +29,24 @@ int getCyrillicPositionUTF8(const string& str, size_t pos) {
 string getCyrillicFromPositionUTF8(int pos, const string& originalChar) {
     if (pos < 0 || pos >= 33) return "?";
     
-    // ВОТ ИСПРАВЛЕНИЕ: используем тот же подход, что и в getCyrillicPositionUTF8
     vector<string> alphabetLower = getCyrillicAlphabet(false);
     vector<string> alphabetUpper = getCyrillicAlphabet(true);
     
-    // Определяем, в каком регистре был оригинальный символ
+    // Определяем регистр оригинального символа
+    bool isLower = false;
     for (size_t i = 0; i < alphabetLower.size(); i++) {
         if (alphabetLower[i] == originalChar) {
-            return alphabetLower[pos];
-        }
-        if (alphabetUpper[i] == originalChar) {
-            return alphabetUpper[pos];
+            isLower = true;
+            break;
         }
     }
     
-    // Если не нашли (маловероятно), возвращаем из нижнего регистра
-    return alphabetLower[pos];
+    // Для заглавных используем upper, для строчных - lower
+    if (isLower) {
+        return alphabetLower[pos];
+    } else {
+        return alphabetUpper[pos];
+    }
 }
 
 // Подготавливает ключ - оставляет только буквы
