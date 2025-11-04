@@ -7,9 +7,6 @@
 
 using namespace std;
 
-//парсит строковый ключ, извлекая только цифры
-//возвращает вектор чисел от 0 до 9
-
 vector<int> parseKey(const string& keyStr) {
     vector<int> result;
     for (char c : keyStr) {
@@ -20,9 +17,6 @@ vector<int> parseKey(const string& keyStr) {
     return result;
 }
 
-
-//расширяет ключ до нужной длины путем повторения
-
 void extendKey(vector<int>& key, size_t length) {
     if (key.empty()) return;
     
@@ -32,12 +26,6 @@ void extendKey(vector<int>& key, size_t length) {
     }
 }
 
-//шифрование текста
-//алгоритм: каждый символ сдвигается на величину, определяемую соответствующей цифрой ключа
-//для кириллицы: 33-буквенный алфавит
-//для латиницы: 26-буквенный алфавит
-//остальные символы не шифруются
- 
 string encryptGronsfeld(const string& plaintext, const string& keyStr, bool useCyrillic) {
     if (plaintext.empty()) return plaintext;
     
@@ -46,94 +34,76 @@ string encryptGronsfeld(const string& plaintext, const string& keyStr, bool useC
         throw invalid_argument("Ключ должен содержать хотя бы одну цифру");
     }
     
-    extendKey(key, plaintext.length());
-    
     string ciphertext;
-    ciphertext.reserve(plaintext.length());
+    size_t textIndex = 0;
+    size_t keyIndex = 0;
     
-    for (size_t i = 0; i < plaintext.length(); i++) {
-        char currentChar = plaintext[i];
-        int shift = key[i];
+    while (textIndex < plaintext.length()) {
+        char currentChar = plaintext[textIndex];
         
-        //шифрование кириллицы
-        if (isCyrillic(currentChar)) {
-            char base;
+        //обработка кириллицы в UTF-8
+        if (useCyrillic && isCyrillicUTF8(plaintext, textIndex)) {
+            // Получаем полный символ (2 байта)
+            string cyrChar = plaintext.substr(textIndex, 2);
+            
+            //определяем регистр и получаем алфавит
+            bool isUpper = (static_cast<unsigned char>(cyrChar[0]) == 0xD0 && 
+                           static_cast<unsigned char>(cyrChar[1]) >= 0x90);
+            vector<string> alphabet = getCyrillicAlphabet(isUpper);
             int alphabetSize = 33;
-            
-            //определяем базовый символ и алфавит
-            if (currentChar >= RUS_A_UPPER && currentChar <= RUS_YA_UPPER) {
-                base = RUS_A_UPPER;
-            } else if (currentChar >= RUS_A_LOWER && currentChar <= RUS_YA_LOWER) {
-                base = RUS_A_LOWER;
-            } else if (currentChar == RUS_YO_UPPER) {
-                base = RUS_YO_UPPER;
-            } else if (currentChar == RUS_YO_LOWER) {
-                base = RUS_YO_LOWER;
-            } else {
-                ciphertext += currentChar;
-                continue;
-            }
-            
-            //создаем кириллический алфавит с правильным порядком (Ё после Е)
-            vector<char> cyrAlphabet;
-            if (base == RUS_A_UPPER || base == RUS_YO_UPPER) {
-                //верхний регистр: А-Е, Ё, Ж-Я
-                for (char c = RUS_A_UPPER; c <= RUS_E_UPPER; c++) cyrAlphabet.push_back(c);
-                cyrAlphabet.push_back(RUS_YO_UPPER);
-                for (char c = RUS_ZH_UPPER; c <= RUS_YA_UPPER; c++) cyrAlphabet.push_back(c);
-            } else {
-                //нижний регистр: а-е, ё, ж-я
-                for (char c = RUS_A_LOWER; c <= RUS_E_LOWER; c++) cyrAlphabet.push_back(c);
-                cyrAlphabet.push_back(RUS_YO_LOWER);
-                for (char c = RUS_ZH_LOWER; c <= RUS_YA_LOWER; c++) cyrAlphabet.push_back(c);
-            }
             
             //находим позицию символа в алфавите
             int currentPos = -1;
-            for (size_t j = 0; j < cyrAlphabet.size(); j++) {
-                if (cyrAlphabet[j] == currentChar) {
+            for (size_t j = 0; j < alphabet.size(); j++) {
+                if (alphabet[j] == cyrChar) {
                     currentPos = j;
                     break;
                 }
             }
             
-            //сдвигаем позицию и берем по модулю
-            if (currentPos != -1) {
+            //выполняем сдвиг
+            if (currentPos != -1 && keyIndex < key.size()) {
+                int shift = key[keyIndex % key.size()];
                 int newPos = (currentPos + shift) % alphabetSize;
-                ciphertext += cyrAlphabet[newPos];
+                ciphertext += alphabet[newPos];
+                keyIndex++;
             } else {
-                ciphertext += currentChar;
+                ciphertext += cyrChar;
             }
+            
+            textIndex += 2; //пропускаем 2 байта UTF-8
         }
-        //шифрование латиницы
+        //обработка латиницы
         else if (isLatin(currentChar)) {
-            char base;
-            int alphabetSize = 26;
-            
-            if (currentChar >= 'A' && currentChar <= 'Z') {
-                base = 'A';
-            } else if (currentChar >= 'a' && currentChar <= 'z') {
-                base = 'a';
+            if (keyIndex < key.size()) {
+                int shift = key[keyIndex % key.size()];
+                char base;
+                int alphabetSize = 26;
+                
+                if (currentChar >= 'A' && currentChar <= 'Z') {
+                    base = 'A';
+                } else {
+                    base = 'a';
+                }
+                
+                char encryptedChar = base + (currentChar - base + shift) % alphabetSize;
+                ciphertext += encryptedChar;
+                keyIndex++;
             } else {
                 ciphertext += currentChar;
-                continue;
             }
-            
-            //сдвиг символа в пределах алфавита
-            char encryptedChar = base + (currentChar - base + shift) % alphabetSize;
-            ciphertext += encryptedChar;
+            textIndex++;
         }
-        //неизменяемы символы
+        // Остальные символы
         else {
             ciphertext += currentChar;
+            textIndex++;
         }
     }
     
     return ciphertext;
 }
 
-//дешифрование текста
-//алгоритм: обратный сдвиг на величину ключа
 string decryptGronsfeld(const string& ciphertext, const string& keyStr, bool useCyrillic) {
     if (ciphertext.empty()) return ciphertext;
     
@@ -142,82 +112,66 @@ string decryptGronsfeld(const string& ciphertext, const string& keyStr, bool use
         throw invalid_argument("Ключ должен содержать хотя бы одну цифру");
     }
     
-    extendKey(key, ciphertext.length());
-    
     string plaintext;
-    plaintext.reserve(ciphertext.length());
+    size_t textIndex = 0;
+    size_t keyIndex = 0;
     
-    for (size_t i = 0; i < ciphertext.length(); i++) {
-        char currentChar = ciphertext[i];
-        int shift = key[i];
+    while (textIndex < ciphertext.length()) {
+        char currentChar = ciphertext[textIndex];
         
-        //дешифрование кириллицы
-        if (isCyrillic(currentChar)) {
-            char base;
+        //обработка кириллицы в UTF-8
+        if (useCyrillic && isCyrillicUTF8(ciphertext, textIndex)) {
+            string cyrChar = ciphertext.substr(textIndex, 2);
+            
+            bool isUpper = (static_cast<unsigned char>(cyrChar[0]) == 0xD0 && 
+                           static_cast<unsigned char>(cyrChar[1]) >= 0x90);
+            vector<string> alphabet = getCyrillicAlphabet(isUpper);
             int alphabetSize = 33;
             
-            if (currentChar >= RUS_A_UPPER && currentChar <= RUS_YA_UPPER) {
-                base = RUS_A_UPPER;
-            } else if (currentChar >= RUS_A_LOWER && currentChar <= RUS_YA_LOWER) {
-                base = RUS_A_LOWER;
-            } else if (currentChar == RUS_YO_UPPER) {
-                base = RUS_YO_UPPER;
-            } else if (currentChar == RUS_YO_LOWER) {
-                base = RUS_YO_LOWER;
-            } else {
-                plaintext += currentChar;
-                continue;
-            }
-            
-            //создаем кириллический алфавит
-            vector<char> cyrAlphabet;
-            if (base == RUS_A_UPPER || base == RUS_YO_UPPER) {
-                for (char c = RUS_A_UPPER; c <= RUS_E_UPPER; c++) cyrAlphabet.push_back(c);
-                cyrAlphabet.push_back(RUS_YO_UPPER);
-                for (char c = RUS_ZH_UPPER; c <= RUS_YA_UPPER; c++) cyrAlphabet.push_back(c);
-            } else {
-                for (char c = RUS_A_LOWER; c <= RUS_E_LOWER; c++) cyrAlphabet.push_back(c);
-                cyrAlphabet.push_back(RUS_YO_LOWER);
-                for (char c = RUS_ZH_LOWER; c <= RUS_YA_LOWER; c++) cyrAlphabet.push_back(c);
-            }
-            
-            //находим позицию и выполняем обратный сдвиг
             int currentPos = -1;
-            for (size_t j = 0; j < cyrAlphabet.size(); j++) {
-                if (cyrAlphabet[j] == currentChar) {
+            for (size_t j = 0; j < alphabet.size(); j++) {
+                if (alphabet[j] == cyrChar) {
                     currentPos = j;
                     break;
                 }
             }
             
-            if (currentPos != -1) {
+            if (currentPos != -1 && keyIndex < key.size()) {
+                int shift = key[keyIndex % key.size()];
                 int newPos = (currentPos - shift + alphabetSize) % alphabetSize;
-                plaintext += cyrAlphabet[newPos];
+                plaintext += alphabet[newPos];
+                keyIndex++;
             } else {
-                plaintext += currentChar;
+                plaintext += cyrChar;
             }
+            
+            textIndex += 2;
         }
-        //дешифрование латиницы
+        //обработка латиницы
         else if (isLatin(currentChar)) {
-            char base;
-            int alphabetSize = 26;
-            
-            if (currentChar >= 'A' && currentChar <= 'Z') {
-                base = 'A';
-            } else if (currentChar >= 'a' && currentChar <= 'z') {
-                base = 'a';
+            if (keyIndex < key.size()) {
+                int shift = key[keyIndex % key.size()];
+                char base;
+                int alphabetSize = 26;
+                
+                if (currentChar >= 'A' && currentChar <= 'Z') {
+                    base = 'A';
+                } else {
+                    base = 'a';
+                }
+                
+                char decryptedChar = base + (currentChar - base - shift + alphabetSize) % alphabetSize;
+                plaintext += decryptedChar;
+                keyIndex++;
             } else {
                 plaintext += currentChar;
-                continue;
             }
-            
-            //обратный сдвиг для латиницы
-            char decryptedChar = base + (currentChar - base - shift + alphabetSize) % alphabetSize;
-            plaintext += decryptedChar;
+            textIndex++;
         }
-        //неизменяемые символы
+        //остальные символы
         else {
             plaintext += currentChar;
+            textIndex++;
         }
     }
     

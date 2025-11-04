@@ -9,59 +9,87 @@
 using namespace std;
 
 
-//алгоритм шифрования:
-//замена пробелов на подчеркивания для сохранения структуры текста
-//создание таблицы и запись текста построчно
-//определение порядка столбцов на основе ключа (сортировка)
-//чтение таблицы по столбцам в порядке, определенном ключом
+string getCharAt(const string& text, size_t& index) {
+    if (index >= text.length()) return "";
+    
+    if (isCyrillicUTF8(text, index)) {
+        string result = text.substr(index, 2);
+        index += 2;
+        return result;
+    } else {
+        string result(1, text[index]);
+        index++;
+        return result;
+    }
+}
+
 string encryptPermutationText(const string& text, const string& key) {
     if (text.empty()) return "";
-    string processed = replaceSpacesWithUnderscores(text);//замена пробеловз
+    
+    string processed = replaceSpacesWithUnderscores(text);
     string upperKey;
-    for (unsigned char c : key) if (isalpha(c)) upperKey += toupper(c); //подготовка ключа: оставляем только буквы и преобразуем в верхний регистр
-    if (upperKey.empty()) return processed;
-
-    //создаем порядок столбцов на основе ключа (символ + позиция)
-    vector<pair<char, int>> keyWithIndex;
-    for (int i = 0; i < (int)upperKey.size(); ++i) {
-        keyWithIndex.push_back({upperKey[i], i});
+    
+    //подготовка ключа - оставляем только буквы
+    for (size_t i = 0; i < key.length(); ) {
+        if (isCyrillicUTF8(key, i)) {
+            upperKey += key[i];
+            upperKey += key[i + 1];
+            i += 2;
+        } else if (isalpha(key[i])) {
+            upperKey += toupper(key[i]);
+            i++;
+        } else {
+            i++;
+        }
     }
     
-    //сортируем ключ для получения порядка перестановки
+    if (upperKey.empty()) return processed;
+
+    //создаем порядок столбцов
+    vector<pair<string, int>> keyWithIndex;
+    for (size_t i = 0; i < upperKey.length(); ) {
+        string keyChar;
+        if (isCyrillicUTF8(upperKey, i)) {
+            keyChar = upperKey.substr(i, 2);
+            keyWithIndex.push_back({keyChar, keyWithIndex.size()});
+            i += 2;
+        } else {
+            keyChar = string(1, upperKey[i]);
+            keyWithIndex.push_back({keyChar, keyWithIndex.size()});
+            i++;
+        }
+    }
+    
     sort(keyWithIndex.begin(), keyWithIndex.end(), 
-         [](const pair<char,int>& a, const pair<char,int>& b) {
+         [](const pair<string, int>& a, const pair<string, int>& b) {
              return a.first == b.first ? a.second < b.second : a.first < b.first;
          });
     
-    //создаем порядок столбцов для шифрования
-    vector<int> columnOrder(upperKey.size());
-    for (int i = 0; i < (int)keyWithIndex.size(); ++i) {
+    vector<int> columnOrder(keyWithIndex.size());
+    for (size_t i = 0; i < keyWithIndex.size(); ++i) {
         columnOrder[keyWithIndex[i].second] = i;
     }
 
-    int cols = (int)upperKey.size(); //количество столбцов = длина ключа
-    int rows = (processed.size() + cols - 1) / cols; //вычисляем необходимое количество строк
+    int cols = keyWithIndex.size();
+    size_t effectiveLength = countEffectiveChars(processed); // Используем функцию из utils
+    int rows = (effectiveLength + cols - 1) / cols;
     
-    //создаем таблицу (заполняем "_")
-    vector<vector<char>> table(rows, vector<char>(cols, '_'));
+    //создаем таблицу
+    vector<vector<string>> table(rows, vector<string>(cols, "_"));
     
-    //заполняем таблицу по строкам (по диагонали с левого верхнего угла)
+    //заполняем таблицу
+    size_t textIndex = 0;
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
-            int pos = i * cols + j;
-            if (pos < (int)processed.size()) {
-                table[i][j] = processed[pos];
+            if (textIndex < processed.length()) {
+                table[i][j] = getCharAt(processed, textIndex);
             }
         }
     }
     
-    //читаем по столбцам в порядке columnOrder
+    //читаем по столбцам
     string ciphertext;
-    ciphertext.reserve(rows * cols);
-    
-    //читаем столбцы в порядке: сначала столбец с наименьшим номером в новой нумерации
     for (int colIndex = 0; colIndex < cols; ++colIndex) {
-        //находим исходный столбец, который должен идти на позиции colIndex
         int originalCol = -1;
         for (int i = 0; i < cols; ++i) {
             if (columnOrder[i] == colIndex) {
@@ -70,7 +98,6 @@ string encryptPermutationText(const string& text, const string& key) {
             }
         }
         
-        //читаем столбец сверху вниз
         for (int i = 0; i < rows; ++i) {
             ciphertext += table[i][originalCol];
         }
@@ -79,39 +106,57 @@ string encryptPermutationText(const string& text, const string& key) {
     return ciphertext;
 }
 
-//алгоритм дешифрования - обратный процесс шифрованию
 string decryptPermutationText(const string& ciphertext, const string& key) {
     if (ciphertext.empty()) return "";
+    
     string upperKey;
-    for (unsigned char c : key) if (isalpha(c)) upperKey += toupper(c);
+    for (size_t i = 0; i < key.length(); ) {
+        if (isCyrillicUTF8(key, i)) {
+            upperKey += key[i];
+            upperKey += key[i + 1];
+            i += 2;
+        } else if (isalpha(key[i])) {
+            upperKey += toupper(key[i]);
+            i++;
+        } else {
+            i++;
+        }
+    }
+    
     if (upperKey.empty()) return ciphertext;
 
-    //создаем порядок столбцов на основе ключа
-    vector<pair<char, int>> keyWithIndex;
-    for (int i = 0; i < (int)upperKey.size(); ++i) {
-        keyWithIndex.push_back({upperKey[i], i});
+    vector<pair<string, int>> keyWithIndex;
+    for (size_t i = 0; i < upperKey.length(); ) {
+        string keyChar;
+        if (isCyrillicUTF8(upperKey, i)) {
+            keyChar = upperKey.substr(i, 2);
+            keyWithIndex.push_back({keyChar, keyWithIndex.size()});
+            i += 2;
+        } else {
+            keyChar = string(1, upperKey[i]);
+            keyWithIndex.push_back({keyChar, keyWithIndex.size()});
+            i++;
+        }
     }
     
     sort(keyWithIndex.begin(), keyWithIndex.end(), 
-         [](const pair<char,int>& a, const pair<char,int>& b) {
+         [](const pair<string, int>& a, const pair<string, int>& b) {
              return a.first == b.first ? a.second < b.second : a.first < b.first;
          });
     
-    vector<int> columnOrder(upperKey.size());
-    for (int i = 0; i < (int)keyWithIndex.size(); ++i) {
+    vector<int> columnOrder(keyWithIndex.size());
+    for (size_t i = 0; i < keyWithIndex.size(); ++i) {
         columnOrder[keyWithIndex[i].second] = i;
     }
 
-    int cols = (int)upperKey.size();
-    int rows = (ciphertext.size() + cols - 1) / cols;
+    int cols = keyWithIndex.size();
+    size_t effectiveLength = countEffectiveChars(ciphertext); // Используем функцию из utils
+    int rows = (effectiveLength + cols - 1) / cols;
     
-    //создаем пустую таблицу
-    vector<vector<char>> table(rows, vector<char>(cols, '_'));
+    vector<vector<string>> table(rows, vector<string>(cols, "_"));
     
-    //заполняем таблицу по столбцам в порядке columnOrder
-    int cipherIndex = 0;
+    size_t cipherIndex = 0;
     for (int colIndex = 0; colIndex < cols; ++colIndex) {
-        //находим исходный столбец, который должен идти на позиции colIndex
         int originalCol = -1;
         for (int i = 0; i < cols; ++i) {
             if (columnOrder[i] == colIndex) {
@@ -120,29 +165,24 @@ string decryptPermutationText(const string& ciphertext, const string& key) {
             }
         }
         
-        //записываем столбец сверху вниз
         for (int i = 0; i < rows; ++i) {
-            if (cipherIndex < (int)ciphertext.size()) {
-                table[i][originalCol] = ciphertext[cipherIndex++];
+            if (cipherIndex < ciphertext.length()) {
+                table[i][originalCol] = getCharAt(ciphertext, cipherIndex);
             }
         }
     }
     
-    //читаем таблицу по строкам
     string plaintext;
-    plaintext.reserve(rows * cols);
-    
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
             plaintext += table[i][j];
         }
     }
     
-    //убираем лишние подчеркивания в конце
     size_t lastChar = plaintext.find_last_not_of('_');
     if (lastChar != string::npos) {
         plaintext = plaintext.substr(0, lastChar + 1);
     }
     
-    return restoreUnderscoresToSpaces(plaintext); //возвращаем без "заглушек" в виде "_"
+    return restoreUnderscoresToSpaces(plaintext);
 }

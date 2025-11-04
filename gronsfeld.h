@@ -2,7 +2,6 @@
 #define CIPHER_GRONSFELD_H
 
 #include <string>
-
 using namespace std;
 
 string encryptGronsfeld(const string& plaintext, const string& keyStr, bool useCyrillic = true);

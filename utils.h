@@ -2,27 +2,34 @@
 #define UTILS_H
 
 #include <string>
+#include <string_view>
+#include <vector>
+using namespace std;
+//константы для кириллических символов в UTF-8
+//двубайтовые символы в UTF-8
+const string RUS_A_UPPER = "\xD0\x90";    // А
+const string RUS_YA_UPPER = "\xD0\xAF";   // Я
+const string RUS_A_LOWER = "\xD0\xB0";    // а
+const string RUS_YA_LOWER = "\xD1\x8F";   // я
+const string RUS_YO_UPPER = "\xD0\x81";   // Ё
+const string RUS_YO_LOWER = "\xD1\x91";   // ё
+const string RUS_E_UPPER = "\xD0\x95";    // Е
+const string RUS_ZH_UPPER = "\xD0\x96";   // Ж
+const string RUS_E_LOWER = "\xD0\xB5";    // е
+const string RUS_ZH_LOWER = "\xD0\xB6";   // ж
 
-// Константы для кириллических символов
-const char RUS_A_UPPER = -64;    // А
-const char RUS_YA_UPPER = -33;   // Я
-const char RUS_A_LOWER = -32;    // а
-const char RUS_YA_LOWER = -1;    // я
-const char RUS_YO_UPPER = -15;   // Ё
-const char RUS_YO_LOWER = -16;   // ё
-const char RUS_E_UPPER = -27;    // Е
-const char RUS_ZH_UPPER = -25;   // Ж
-const char RUS_E_LOWER = -59;    // е
-const char RUS_ZH_LOWER = -57;   // ж
+//функции для работы с пробелами и подчеркиваниями
+string replaceSpacesWithUnderscores(const string& text);
+string restoreUnderscoresToSpaces(const string& text);
 
-// Функции для работы с пробелами и подчеркиваниями
-std::string replaceSpacesWithUnderscores(const std::string& text);
-std::string restoreUnderscoresToSpaces(const std::string& text);
-
-// Функции для работы с символами
+//функции для работы с символами в UTF-8
 bool isLatin(char c);
-bool isCyrillic(char c);
-char toUpperCyrillic(char c);
-char toLowerCyrillic(char c);
+bool isCyrillicUTF8(const string& str, size_t pos);
+bool isCyrillicChar(const string& str, size_t pos);
+string getCyrillicBase(const string& str, size_t pos);
+vector<string> getCyrillicAlphabet(bool isUpper);
 
+//вспомогательные функции для табличной перестановки
+size_t countEffectiveChars(const string& text);
+string getCharAt(const string& text, size_t& index);
 #endif
