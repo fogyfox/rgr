@@ -7,6 +7,7 @@
 
 using namespace std;
 
+//парсирование ключа
 vector<int> parseKey(const string& keyStr) {
     vector<int> result;
     for (char c : keyStr) {
@@ -17,6 +18,7 @@ vector<int> parseKey(const string& keyStr) {
     return result;
 }
 
+//шифрование текста
 string encryptGronsfeld(const string& plaintext, const string& keyStr, bool useCyrillic) {
     if (plaintext.empty()) return plaintext;
     
@@ -26,30 +28,28 @@ string encryptGronsfeld(const string& plaintext, const string& keyStr, bool useC
     }
     
     string ciphertext;
-    size_t textIndex = 0;
     size_t keyIndex = 0;
     
-    while (textIndex < plaintext.length()) {
-        char currentChar = plaintext[textIndex];
+    for (size_t i = 0; i < plaintext.length(); ) {
+        char currentChar = plaintext[i];
+        int shift = key[keyIndex % key.size()];
         
-        // Обработка кириллицы в UTF-8
-        if (useCyrillic && isCyrillicUTF8(plaintext, textIndex)) {
-            string cyrChar = plaintext.substr(textIndex, 2);
+        //обработка кириллицы в UTF-8
+        if (useCyrillic && isCyrillicUTF8(plaintext, i)) {
+            string cyrChar = plaintext.substr(i, 2);
             
-            // Определение регистра
+            //определение регистра
             bool isUpper;
             unsigned char first = static_cast<unsigned char>(cyrChar[0]);
             unsigned char second = static_cast<unsigned char>(cyrChar[1]);
 
             if (first == 0xD0) {
-                // D0 90-D0 AF - заглавные, D0 B0-D0 BF - строчные
                 isUpper = (second >= 0x90 && second <= 0xAF);
             } else {
-                // D1 80-D1 8F - строчные, D1 90-D1 9F - строчные (кроме Ё)
                 isUpper = false;
             }
 
-            // Корректировка для Ё
+            //корректировка для Ё
             if (cyrChar == "\xD0\x81") isUpper = true;
             if (cyrChar == "\xD1\x91") isUpper = false;
             
@@ -65,45 +65,29 @@ string encryptGronsfeld(const string& plaintext, const string& keyStr, bool useC
             }
             
             if (currentPos != -1) {
-                int shift = key[keyIndex % key.size()];
                 int newPos = (currentPos + shift) % alphabetSize;
                 string encryptedChar = alphabet[newPos];
                 ciphertext += encryptedChar;
-                keyIndex++;  // Увеличиваем keyIndex только для кириллических букв
+                keyIndex++;
             } else {
                 ciphertext += cyrChar;
             }
             
-            textIndex += 2;
+            i += 2;
         }
-        // Обработка латиницы
-        else if (isLatin(currentChar)) {
-            int shift = key[keyIndex % key.size()];
-            char base;
-            int alphabetSize = 26;
-            
-            if (currentChar >= 'A' && currentChar <= 'Z') {
-                base = 'A';
-            } else {
-                base = 'a';
-            }
-            
-            char encryptedChar = base + (currentChar - base + shift) % alphabetSize;
-            ciphertext += encryptedChar;
-            keyIndex++;  // Увеличиваем keyIndex только для латинских букв
-            textIndex++;
-        }
-        // Обработка не-буквенных символов
+        //обработка ВСЕХ остальных символов ASCII
         else {
-            ciphertext += currentChar;
-            textIndex++;
-            // Не увеличиваем keyIndex для не-буквенных символов
+            unsigned char encryptedChar = (static_cast<unsigned char>(currentChar) + shift) % 256;
+            ciphertext += static_cast<char>(encryptedChar);
+            keyIndex++;
+            i++;
         }
     }
     
     return ciphertext;
 }
 
+//дешифрование текста
 string decryptGronsfeld(const string& ciphertext, const string& keyStr, bool useCyrillic) {
     if (ciphertext.empty()) return ciphertext;
     
@@ -113,17 +97,17 @@ string decryptGronsfeld(const string& ciphertext, const string& keyStr, bool use
     }
     
     string plaintext;
-    size_t textIndex = 0;
     size_t keyIndex = 0;
     
-    while (textIndex < ciphertext.length()) {
-        char currentChar = ciphertext[textIndex];
+    for (size_t i = 0; i < ciphertext.length(); ) {
+        char currentChar = ciphertext[i];
+        int shift = key[keyIndex % key.size()];
         
-        // Обработка кириллицы в UTF-8
-        if (useCyrillic && isCyrillicUTF8(ciphertext, textIndex)) {
-            string cyrChar = ciphertext.substr(textIndex, 2);
+        //обработка кириллицы в UTF-8
+        if (useCyrillic && isCyrillicUTF8(ciphertext, i)) {
+            string cyrChar = ciphertext.substr(i, 2);
             
-            // Определение регистра (аналогично шифрованию)
+            //определение регистра
             bool isUpper;
             unsigned char first = static_cast<unsigned char>(cyrChar[0]);
             unsigned char second = static_cast<unsigned char>(cyrChar[1]);
@@ -149,38 +133,21 @@ string decryptGronsfeld(const string& ciphertext, const string& keyStr, bool use
             }
             
             if (currentPos != -1) {
-                int shift = key[keyIndex % key.size()];
                 int newPos = (currentPos - shift + alphabetSize) % alphabetSize;
                 plaintext += alphabet[newPos];
-                keyIndex++;  // Увеличиваем keyIndex только для кириллических букв
+                keyIndex++;
             } else {
                 plaintext += cyrChar;
             }
             
-            textIndex += 2;
+            i += 2;
         }
-        // Обработка латиницы
-        else if (isLatin(currentChar)) {
-            int shift = key[keyIndex % key.size()];
-            char base;
-            int alphabetSize = 26;
-            
-            if (currentChar >= 'A' && currentChar <= 'Z') {
-                base = 'A';
-            } else {
-                base = 'a';
-            }
-            
-            char decryptedChar = base + (currentChar - base - shift + alphabetSize) % alphabetSize;
-            plaintext += decryptedChar;
-            keyIndex++;  // Увеличиваем keyIndex только для латинских букв
-            textIndex++;
-        }
-        // Обработка не-буквенных символов
+        //обработка остальных символов ASCII
         else {
-            plaintext += currentChar;
-            textIndex++;
-            // Не увеличиваем keyIndex для не-буквенных символов
+            unsigned char decryptedChar = (static_cast<unsigned char>(currentChar) - shift + 256) % 256;
+            plaintext += static_cast<char>(decryptedChar);
+            keyIndex++;
+            i++;
         }
     }
     

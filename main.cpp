@@ -79,42 +79,54 @@ void encryptBinaryFile(const string& inputFile, const string& outputFile, const 
     if (!out) throw runtime_error("Не удалось создать файл " + outputFile);
     if (key.empty()) throw runtime_error("Ключ не должен быть пустым");
 
-    //буфер для чтения/записи блоков данных
-    vector<char> buffer(8192);
-    size_t keyLen = key.size();
-    size_t pos = 0; //количество фактически прочитанных байт
-
-    while (in) {
-        in.read(buffer.data(), buffer.size());
-        streamsize n = in.gcount();
-        //шифрование каждого байта в блоке
-        for (streamsize i = 0; i < n; ++i) {
-            unsigned char b = static_cast<unsigned char>(buffer[i]);
-            unsigned char k = static_cast<unsigned char>(key[(pos + i) % keyLen]);
-
-            switch (method) {
-                case 1: //Табличная перестановка - XOR
-                    buffer[i] = b ^ k; 
-                    break;
-                case 2: // Виженер - сложение по модулю 256
-                    buffer[i] = (b + k) % 256; 
-                    break;
-                case 3: // Гронсфельд - сложение с цифровым ключом
-                    //Для бинарных файлов используем только цифры из ключа
-                    unsigned char digit_key = 0;
-                    for (char key_char : key) {
-                        if (key_char >= '0' && key_char <= '9') {
-                            digit_key = key_char - '0';
-                            break;
-                        }
-                    }
-                    buffer[i] = (b + digit_key) % 256; 
-                    break;
+    // Читаем весь файл
+    string content((istreambuf_iterator<char>(in)), istreambuf_iterator<char>());
+    
+    string result;
+    switch (method) {
+        case 1: 
+            // Табличная перестановка для бинарных данных
+            result = encryptPermutationBinary(content, key);
+            break;
+        case 2: 
+            // Виженер - сложение по модулю 256
+            {
+                vector<char> buffer(content.begin(), content.end());
+                size_t keyLen = key.size();
+                for (size_t i = 0; i < buffer.size(); ++i) {
+                    unsigned char b = static_cast<unsigned char>(buffer[i]);
+                    unsigned char k = static_cast<unsigned char>(key[i % keyLen]);
+                    buffer[i] = (b + k) % 256;
+                }
+                result = string(buffer.begin(), buffer.end());
             }
-        }
-        pos += n;
-        out.write(buffer.data(), n); //запись зашифрованного блока
+            break;
+        case 3: 
+            // Гронсфельд - сложение с цифровым ключом
+            {
+                vector<char> buffer(content.begin(), content.end());
+                // Используем только цифры из ключа
+                vector<unsigned char> digits;
+                for (char c : key) {
+                    if (c >= '0' && c <= '9') {
+                        digits.push_back(c - '0');
+                    }
+                }
+                if (digits.empty()) {
+                    digits.push_back(0);
+                }
+                
+                for (size_t i = 0; i < buffer.size(); ++i) {
+                    unsigned char b = static_cast<unsigned char>(buffer[i]);
+                    unsigned char k = digits[i % digits.size()];
+                    buffer[i] = (b + k) % 256;
+                }
+                result = string(buffer.begin(), buffer.end());
+            }
+            break;
     }
+
+    out.write(result.data(), result.size());
 }
 
 void decryptBinaryFile(const string& inputFile, const string& outputFile, const string& key, int method) {
@@ -124,39 +136,53 @@ void decryptBinaryFile(const string& inputFile, const string& outputFile, const 
     if (!out) throw runtime_error("Не удалось создать файл " + outputFile);
     if (key.empty()) throw runtime_error("Ключ не должен быть пустым");
 
-    vector<char> buffer(8192);
-    size_t keyLen = key.size();
-    size_t pos = 0;
-
-    while (in) {
-        in.read(buffer.data(), buffer.size());
-        streamsize n = in.gcount();
-        for (streamsize i = 0; i < n; ++i) {
-            unsigned char b = static_cast<unsigned char>(buffer[i]);
-            unsigned char k = static_cast<unsigned char>(key[(pos + i) % keyLen]);
-
-            switch (method) {
-                case 1: //Табличное шифрование - XOR
-                    buffer[i] = b ^ k; 
-                    break;
-                case 2: //Виженер - вычитание по модулю 256
-                    buffer[i] = (b - k + 256) % 256; 
-                    break;
-                case 3: //Гронсфельд - вычитание с цифровым ключом (берётся только первая цифра из ключа)
-                    unsigned char digit_key = 0;
-                    for (char key_char : key) {
-                        if (key_char >= '0' && key_char <= '9') {
-                            digit_key = key_char - '0';
-                            break;
-                        }
-                    }
-                    buffer[i] = (b - digit_key + 256) % 256; 
-                    break;
+    // Читаем весь файл
+    string content((istreambuf_iterator<char>(in)), istreambuf_iterator<char>());
+    
+    string result;
+    switch (method) {
+        case 1: 
+            // Табличная перестановка для бинарных данных
+            result = decryptPermutationBinary(content, key);
+            break;
+        case 2: 
+            // Виженер - вычитание по модулю 256
+            {
+                vector<char> buffer(content.begin(), content.end());
+                size_t keyLen = key.size();
+                for (size_t i = 0; i < buffer.size(); ++i) {
+                    unsigned char b = static_cast<unsigned char>(buffer[i]);
+                    unsigned char k = static_cast<unsigned char>(key[i % keyLen]);
+                    buffer[i] = (b - k + 256) % 256;
+                }
+                result = string(buffer.begin(), buffer.end());
             }
-        }
-        pos += n;
-        out.write(buffer.data(), n); //запись
+            break;
+        case 3: 
+            // Гронсфельд - вычитание с цифровым ключом
+            {
+                vector<char> buffer(content.begin(), content.end());
+                vector<unsigned char> digits;
+                for (char c : key) {
+                    if (c >= '0' && c <= '9') {
+                        digits.push_back(c - '0');
+                    }
+                }
+                if (digits.empty()) {
+                    digits.push_back(0);
+                }
+                
+                for (size_t i = 0; i < buffer.size(); ++i) {
+                    unsigned char b = static_cast<unsigned char>(buffer[i]);
+                    unsigned char k = digits[i % digits.size()];
+                    buffer[i] = (b - k + 256) % 256;
+                }
+                result = string(buffer.begin(), buffer.end());
+            }
+            break;
     }
+
+    out.write(result.data(), result.size());
 }
 
 //сохранение текста в файл

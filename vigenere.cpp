@@ -32,7 +32,7 @@ string getCyrillicFromPositionUTF8(int pos, const string& originalChar) {
     vector<string> alphabetLower = getCyrillicAlphabet(false);
     vector<string> alphabetUpper = getCyrillicAlphabet(true);
     
-    // Определяем регистр оригинального символа
+    //определяем регистр оригинального символа
     bool isLower = false;
     for (size_t i = 0; i < alphabetLower.size(); i++) {
         if (alphabetLower[i] == originalChar) {
@@ -41,7 +41,7 @@ string getCyrillicFromPositionUTF8(int pos, const string& originalChar) {
         }
     }
     
-    // Для заглавных используем upper, для строчных - lower
+    //для заглавных используем upper, для строчных - lower
     if (isLower) {
         return alphabetLower[pos];
     } else {
@@ -49,28 +49,32 @@ string getCyrillicFromPositionUTF8(int pos, const string& originalChar) {
     }
 }
 
-// Подготавливает ключ - оставляет только буквы
-string prepareKey(const string& key) {
-    string preparedKey;
-    
-    for (size_t i = 0; i < key.length(); ) {
-        if (isCyrillicUTF8(key, i)) {
-            // Для кириллицы добавляем оба байта как есть
-            preparedKey += key[i];
-            preparedKey += key[i + 1];
-            i += 2;
-        } else if (isLatin(key[i])) {
-            preparedKey += key[i]; // сохраняем оригинальный регистр
-            i++;
-        } else {
-            i++;
-        }
+//функция для получения числового значения символа ключа (0-255)
+int getKeyValue(const string& key, size_t& keyPos) {
+    if (keyPos >= key.length()) {
+        keyPos = 0;
     }
     
-    return preparedKey;
+    int value;
+    if (isCyrillicUTF8(key, keyPos)) {
+        //для кириллицы используем позицию в алфавите
+        value = getCyrillicPositionUTF8(key, keyPos);
+        keyPos += 2;
+    } else {
+        //для всех остальных символов используем ASCII код
+        value = static_cast<unsigned char>(key[keyPos]);
+        keyPos++;
+    }
+    
+    return value;
 }
 
-// Создает расширенный ключ той же длины, что и текст
+//подготавливает ключ
+string prepareKey(const string& key) {
+    return key;
+}
+
+//создает расширенный ключ той же длины, что и текст
 string expandKey(const string& text, const string& key) {
     if (key.empty()) return "";
     
@@ -78,96 +82,52 @@ string expandKey(const string& text, const string& key) {
     size_t keyPos = 0;
     
     for (size_t i = 0; i < text.length(); ) {
-        if (isCyrillicUTF8(text, i)) {
-            //для кириллического символа в тексте берем кириллический символ из ключа
-            if (keyPos < key.length()) {
-                if (isCyrillicUTF8(key, keyPos)) {
-                    expandedKey += key[keyPos];
-                    expandedKey += key[keyPos + 1];
-                    keyPos += 2;
-                } else {
-                    //если в ключе латиница, используем ее как есть
-                    expandedKey += key[keyPos];
-                    expandedKey += ' '; //заполнитель
-                    keyPos++;
-                }
-            } else {
-                keyPos = 0;
-                if (isCyrillicUTF8(key, keyPos)) {
-                    expandedKey += key[keyPos];
-                    expandedKey += key[keyPos + 1];
-                    keyPos += 2;
-                } else {
-                    expandedKey += key[keyPos];
-                    expandedKey += ' ';
-                    keyPos++;
-                }
-            }
-            i += 2;
-        } else if (isLatin(text[i])) {
-            //для латинского символа берем один символ из ключа
-            if (keyPos < key.length()) {
-                expandedKey += key[keyPos];
-                keyPos++;
-            } else {
-                keyPos = 0;
-                expandedKey += key[keyPos];
-                keyPos++;
-            }
-            i++;
-        } else {
-            //для не-буквенных символов не используем ключ
-            expandedKey += ' ';
-            i++;
-        }
-        
         if (keyPos >= key.length()) {
             keyPos = 0;
+        }
+        
+        if (isCyrillicUTF8(key, keyPos)) {
+            expandedKey += key[keyPos];
+            expandedKey += key[keyPos + 1];
+            keyPos += 2;
+        } else {
+            expandedKey += key[keyPos];
+            keyPos++;
+        }
+        
+        //пропускаем другое символы в тексте, но используем ключ для них
+        if (isCyrillicUTF8(text, i)) {
+            i += 2;
+        } else {
+            i++;
         }
     }
     
     return expandedKey;
 }
 
-// Получает числовой сдвиг из символа ключа
-int getShiftFromKeyChar(const string& keyChar, size_t pos) {
-    if (isCyrillicUTF8(keyChar, pos)) {
-        int posCyr = getCyrillicPositionUTF8(keyChar, pos);
-        return posCyr != -1 ? posCyr : 0;
-    } else if (isLatin(keyChar[pos])) {
-        return toupper(keyChar[pos]) - 'A';
-    }
-    return 0;
-}
-
-// Основная функция шифрования
+//функция шифрования
 string encryptVigenere(const string& plaintext, const string& key, bool useCyrillic) {
     if (plaintext.empty()) return plaintext;
     
     string preparedKey = prepareKey(key);
     if (preparedKey.empty()) {
-        throw invalid_argument("Ключ должен содержать хотя бы одну букву");
+        throw invalid_argument("Ключ не должен быть пустым");
     }
     
-    string expandedKey = expandKey(plaintext, preparedKey);
     string ciphertext;
+    size_t keyPos = 0;
     
-    size_t i = 0;
-    while (i < plaintext.length()) {
-        // Шифрование кириллицы
+    for (size_t i = 0; i < plaintext.length(); ) {
+        int shift = getKeyValue(preparedKey, keyPos);
+        
+        //шифрование кириллицы
         if (useCyrillic && isCyrillicUTF8(plaintext, i)) {
             string cyrChar = plaintext.substr(i, 2);
             int textPos = getCyrillicPositionUTF8(plaintext, i);
             
             if (textPos != -1) {
-                // Получаем сдвиг из ключа
-                int shift = getShiftFromKeyChar(expandedKey, i);
-                
-                // Выполняем шифрование
-                int newPos = (textPos + shift) % 33;
-                
-                // Определяем регистр исходного символа
-                bool isLower = (static_cast<unsigned char>(cyrChar[0]) == 0xD1);
+                int newPos = (textPos + shift + 1) % 33;
                 string encryptedChar = getCyrillicFromPositionUTF8(newPos, cyrChar);
                 ciphertext += encryptedChar;
             } else {
@@ -175,23 +135,10 @@ string encryptVigenere(const string& plaintext, const string& key, bool useCyril
             }
             i += 2;
         }
-        // Шифрование латиницы
-        else if (isLatin(plaintext[i])) {
-            char currentChar = plaintext[i];
-            char base = isupper(currentChar) ? 'A' : 'a';
-            
-            // Получаем сдвиг из ключа
-            int shift = getShiftFromKeyChar(expandedKey, i);
-            
-            // Выполняем шифрование
-            char encryptedChar = base + (currentChar - base + shift) % 26;
-            ciphertext += encryptedChar;
-            
-            i++;
-        }
-        // Остальные символы
+        //шифрование символов ASCII
         else {
-            ciphertext += plaintext[i];
+            unsigned char encryptedChar = (static_cast<unsigned char>(plaintext[i]) + shift + 1) % 256;
+            ciphertext += static_cast<char>(encryptedChar);
             i++;
         }
     }
@@ -199,38 +146,28 @@ string encryptVigenere(const string& plaintext, const string& key, bool useCyril
     return ciphertext;
 }
 
-// Основная функция дешифрования
+//функция дешифрования
 string decryptVigenere(const string& ciphertext, const string& key, bool useCyrillic) {
     if (ciphertext.empty()) return ciphertext;
     
     string preparedKey = prepareKey(key);
     if (preparedKey.empty()) {
-        throw invalid_argument("Ключ должен содержать хотя бы одну букву");
+        throw invalid_argument("Ключ не должен быть пустым");
     }
     
-    string expandedKey = expandKey(ciphertext, preparedKey);
     string plaintext;
+    size_t keyPos = 0;
     
-    size_t i = 0;
-    while (i < ciphertext.length()) {
-        // Дешифрование кириллицы
+    for (size_t i = 0; i < ciphertext.length(); ) {
+        int shift = getKeyValue(preparedKey, keyPos);
+        
+        //дешифрование кириллицы
         if (useCyrillic && isCyrillicUTF8(ciphertext, i)) {
             string cyrChar = ciphertext.substr(i, 2);
             int textPos = getCyrillicPositionUTF8(ciphertext, i);
             
             if (textPos != -1) {
-                // Получаем сдвиг из ключа
-                int shift = getShiftFromKeyChar(expandedKey, i);
-                
-                // Выполняем дешифрование
-                int newPos = (textPos - shift + 33) % 33;
-                
-                // ВОТ ИСПРАВЛЕНИЕ: определяем регистр по ЗАШИФРОВАННОМУ тексту, но инвертируем логику
-                // Если зашифрованный текст в нижнем регистре - значит оригинал был в верхнем, и наоборот
-                bool isLower = (static_cast<unsigned char>(cyrChar[0]) == 0xD1);
-                // Инвертируем регистр для дешифрования
-                isLower = !isLower;
-                
+                int newPos = (textPos - shift - 1 + 33) % 33;
                 string decryptedChar = getCyrillicFromPositionUTF8(newPos, cyrChar);
                 plaintext += decryptedChar;
             } else {
@@ -238,23 +175,10 @@ string decryptVigenere(const string& ciphertext, const string& key, bool useCyri
             }
             i += 2;
         }
-        // Дешифрование латиницы
-        else if (isLatin(ciphertext[i])) {
-            char currentChar = ciphertext[i];
-            char base = isupper(currentChar) ? 'A' : 'a';
-            
-            // Получаем сдвиг из ключа
-            int shift = getShiftFromKeyChar(expandedKey, i);
-            
-            // Выполняем дешифрование
-            char decryptedChar = base + (currentChar - base - shift + 26) % 26;
-            plaintext += decryptedChar;
-            
-            i++;
-        }
-        // Остальные символы
+        //дешифрование остальных символов ASCII
         else {
-            plaintext += ciphertext[i];
+            unsigned char decryptedChar = (static_cast<unsigned char>(ciphertext[i]) - shift - 1 + 256) % 256;
+            plaintext += static_cast<char>(decryptedChar);
             i++;
         }
     }
