@@ -8,21 +8,6 @@
 
 using namespace std;
 
-//считывание символов с учётом UTF-8
-string getCharAt(const string& text, size_t& index) {
-    if (index >= text.length()) return "";
-    
-    if (isCyrillicUTF8(text, index)) {
-        string result = text.substr(index, 2);
-        index += 2;
-        return result;
-    } else {
-        string result(1, text[index]);
-        index++;
-        return result;
-    }
-}
-
 //функция для получения числового ключа из строки
 vector<int> getNumericKey(const string& key) {
     vector<int> numericKey;
@@ -142,7 +127,7 @@ string decryptPermutationBinary(const string& data, const string& key) {
         }
     }
     
-    //удаляем нулевые байты в конце (заполнители)
+    //удаляем нулевые байты в конце
     while (!result.empty() && result.back() == 0) {
         result.pop_back();
     }
@@ -157,7 +142,7 @@ string encryptPermutationText(const string& text, const string& key) {
     string processed = replaceSpacesWithUnderscores(text);
     string upperKey;
     
-    //подготовка ключа - оставляем только буквы
+    //парсируем ключ
     for (size_t i = 0; i < key.length(); ) {
         if (isCyrillicUTF8(key, i)) {
             upperKey += key[i];

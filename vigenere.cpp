@@ -51,18 +51,29 @@ string getCyrillicFromPositionUTF8(int pos, const string& originalChar) {
 
 //функция для получения числового значения символа ключа (0-255)
 int getKeyValue(const string& key, size_t& keyPos) {
+    if (key.empty()) return 0;
+    
     if (keyPos >= key.length()) {
         keyPos = 0;
     }
     
     int value;
     if (isCyrillicUTF8(key, keyPos)) {
-        //для кириллицы используем позицию в алфавите
+        //для кириллицы используем позицию в алфавите (0-32)
         value = getCyrillicPositionUTF8(key, keyPos);
+        if (value == -1) value = 0;
         keyPos += 2;
     } else {
-        //для всех остальных символов используем ASCII код
-        value = static_cast<unsigned char>(key[keyPos]);
+        //для латинских символов используем позицию в алфавите (0-25)
+        unsigned char c = key[keyPos];
+        if (c >= 'A' && c <= 'Z') {
+            value = c - 'A';
+        } else if (c >= 'a' && c <= 'z') {
+            value = c - 'a';
+        } else {
+            //для остальных символов используем ASCII код по модулю 26
+            value = c % 26;
+        }
         keyPos++;
     }
     
@@ -137,7 +148,18 @@ string encryptVigenere(const string& plaintext, const string& key, bool useCyril
         }
         //шифрование символов ASCII
         else {
-            unsigned char encryptedChar = (static_cast<unsigned char>(plaintext[i]) + shift + 1) % 256;
+            unsigned char currentChar = plaintext[i];
+            unsigned char encryptedChar;
+
+            if (isalpha(currentChar)) {
+                //для латинских букв - шифрование с сохранением регистра
+                char base = isupper(currentChar) ? 'A' : 'a';
+                encryptedChar = (currentChar - base + shift) % 26 + base;
+            } else {
+                //для остальных символов - простое сложение по модулю 256
+                encryptedChar = (currentChar + shift + 1) % 256;
+            }
+
             ciphertext += static_cast<char>(encryptedChar);
             i++;
         }
@@ -177,11 +199,54 @@ string decryptVigenere(const string& ciphertext, const string& key, bool useCyri
         }
         //дешифрование остальных символов ASCII
         else {
-            unsigned char decryptedChar = (static_cast<unsigned char>(ciphertext[i]) - shift - 1 + 256) % 256;
+            unsigned char currentChar = ciphertext[i];
+            unsigned char decryptedChar;
+            
+            if (isalpha(currentChar)) {
+                //для латинских букв - дешифрование с сохранением регистра
+                char base = isupper(currentChar) ? 'A' : 'a';
+                decryptedChar = (currentChar - base - shift + 26) % 26 + base;
+            } else {
+                //для остальных символов - простое вычитание по модулю 256
+                decryptedChar = (currentChar - shift + 256 + 1) % 256;
+            }
+            
             plaintext += static_cast<char>(decryptedChar);
             i++;
         }
     }
     
     return plaintext;
+}
+
+//бинарное шифрование Виженера
+string encryptVigenereBinary(const string& data, const string& key) {
+    if (data.empty() || key.empty()) return data;
+    
+    string result;
+    size_t keyLen = key.size();
+    
+    for (size_t i = 0; i < data.length(); ++i) {
+        unsigned char b = static_cast<unsigned char>(data[i]);
+        unsigned char k = static_cast<unsigned char>(key[i % keyLen]);
+        result += static_cast<char>((b + k) % 256);
+    }
+    
+    return result;
+}
+
+//бинарное дешифрование Виженера
+string decryptVigenereBinary(const string& data, const string& key) {
+    if (data.empty() || key.empty()) return data;
+    
+    string result;
+    size_t keyLen = key.size();
+    
+    for (size_t i = 0; i < data.length(); ++i) {
+        unsigned char b = static_cast<unsigned char>(data[i]);
+        unsigned char k = static_cast<unsigned char>(key[i % keyLen]);
+        result += static_cast<char>((b - k + 256) % 256);
+    }
+    
+    return result;
 }

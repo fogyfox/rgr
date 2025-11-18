@@ -153,3 +153,47 @@ string decryptGronsfeld(const string& ciphertext, const string& keyStr, bool use
     
     return plaintext;
 }
+
+//бинарное шифрование Гронсфельда
+string encryptGronsfeldBinary(const string& data, const string& keyStr) {
+    if (data.empty()) return data;
+    
+    vector<int> key = parseKey(keyStr);
+    if (key.empty()) {
+        throw invalid_argument("Ключ должен содержать хотя бы одну цифру");
+    }
+    
+    string result;
+    size_t keyIndex = 0;
+    
+    for (size_t i = 0; i < data.length(); ++i) {
+        unsigned char b = static_cast<unsigned char>(data[i]);
+        int shift = key[keyIndex % key.size()];
+        result += static_cast<char>((b + shift) % 256);
+        keyIndex++;
+    }
+    
+    return result;
+}
+
+//бинарное дешифрование Гронсфельда
+string decryptGronsfeldBinary(const string& data, const string& keyStr) {
+    if (data.empty()) return data;
+    
+    vector<int> key = parseKey(keyStr);
+    if (key.empty()) {
+        throw invalid_argument("Ключ должен содержать хотя бы одну цифру");
+    }
+    
+    string result;
+    size_t keyIndex = 0;
+    
+    for (size_t i = 0; i < data.length(); ++i) {
+        unsigned char b = static_cast<unsigned char>(data[i]);
+        int shift = key[keyIndex % key.size()];
+        result += static_cast<char>((b - shift + 256) % 256);
+        keyIndex++;
+    }
+    
+    return result;
+}
